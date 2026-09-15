@@ -1,0 +1,34 @@
+import { MongoClient, Db, Collection, Document } from "mongodb";
+
+const uri = process.env.MONGO_URI || "mongodb://root:root@localhost:27034";
+const dbName = process.env.MONGO_DB_NAME || "treinna";
+
+let client: MongoClient | null = null;
+let database: Db | null = null;
+
+export async function connectMongo(): Promise<Db> {
+  if (!client) {
+    client = new MongoClient(uri, { maxPoolSize: 10 });
+    await client.connect();
+    database = client.db(dbName);
+    console.log(`[MongoDB] Conectado com sucesso ao banco '${dbName}'!`);
+  }
+  return database!;
+}
+
+export function getDb(): Db {
+  if (!database) throw new Error("MongoDB não inicializado.");
+  return database;
+}
+
+export function getCollection<T extends Document = Document>(name: string): Collection<T> {
+  return getDb().collection<T>(name);
+}
+
+export async function closeMongo(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = null;
+    database = null;
+  }
+}

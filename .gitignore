@@ -1,0 +1,21 @@
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Node.js
+app/node_modules/
+app/dist/
+app/.env
+
+# Logs e temporários
+*.log
+*.dump
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+.docker/
