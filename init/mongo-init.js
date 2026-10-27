@@ -1,145 +1,119 @@
 /**
  * ============================================================================
- * MONGODB INITIALIZATION SCRIPT — GASTROHUB / PROJETO
+ * MONGODB INITIALIZATION SCRIPT — TREINNA
  * ============================================================================
- * 
- * Este arquivo é executado automaticamente na primeira inicialização do MongoDB.
- * Aqui você define:
- * 1. O banco de dados do seu sistema
- * 2. As coleções
- * 3. A criação de ÍNDICES (performance e unicidade)
- * 4. A inserção dos dados iniciais
  */
 
-db = db.getSiblingDB("gastrohub");
+db = db.getSiblingDB("treinna");
 
-// ── 1. COLEÇÃO SIMPLES: itens (para início rápido) ───────────────────────────
-db.createCollection("itens");
-db.itens.createIndex({ "categoria": 1 });
-db.itens.createIndex({ "preco": 1 });
-
-db.itens.insertMany([
-  { nome: "Pizza Margherita", categoria: "Pizzas", preco: 45.90, tags: ["italiana", "queijo"] },
-  { nome: "Combo Sashimi", categoria: "Japonesa", preco: 69.90, tags: ["peixe", "fresco"] },
-  { nome: "Classic Burger", categoria: "Burgers", preco: 32.90, tags: ["artesanal", "carne"] },
-  { nome: "Taco de Carne", categoria: "Mexicana", preco: 19.90, tags: ["crocante", "picante"] },
-  { nome: "Prato Feito Mineiro", categoria: "Brasileira", preco: 24.90, tags: ["caseira", "completo"] }
+// ========================================
+// 1. Coleção: plans
+// ========================================
+db.createCollection("plans");
+db.plans.insertMany([
+  { nome: "Basic", preco: 49.90, beneficios: ["1 check-in por dia", "Musculação"] },
+  { nome: "Silver", preco: 89.90, beneficios: ["1 check-in por dia", "Musculação", "Aulas Coletivas"] },
+  { nome: "Gold", preco: 149.90, beneficios: ["Acesso total", "Crossfit", "Sem taxa de adesão"] }
 ]);
 
-// ── 2. COLEÇÃO: restaurantes ──────────────────────────────────────────────────
-db.createCollection("restaurantes");
-db.restaurantes.createIndex({ "nome": 1 });
-db.restaurantes.createIndex({ "ativo": 1 });
-db.restaurantes.createIndex({ "categorias": 1 });
+const plans = db.plans.find().toArray();
+const idBasic = plans[0]._id;
+const idSilver = plans[1]._id;
+const idGold = plans[2]._id;
 
-db.restaurantes.insertMany([
+// ========================================
+// 2. Coleção: gyms
+// ========================================
+db.createCollection("gyms");
+db.gyms.createIndex({ "localizacao": "2dsphere" }); 
+db.gyms.createIndex({ "ativo": 1 });
+
+db.gyms.insertMany([
   {
-    nome: "Sushi Kazu",
-    endereco: { rua: "Rua das Flores", numero: 120, cidade: "Guarapuava", cep: "85010-000" },
-    categorias: ["Japonesa", "Asiática"],
-    horario: { abertura: "11:00", fechamento: "23:00" },
-    avaliacao_media: 4.7,
-    ativo: true
+    nome: "Uplay Guarapuava", ativo: true, mensalidade_base: 120.50, plano_minimo_id: idSilver,
+    localizacao: { type: "Point", coordinates: [-51.4628, -25.3953] },
+    modalidades: ["Musculação", "Crossfit", "Muay Thai"],
+    ultimas_avaliacoes: [{ nota: 5, comentario: "Ótima estrutura." }]
   },
   {
-    nome: "Pizzaria Napoli",
-    endereco: { rua: "Av. Manoel Ribas", numero: 450, cidade: "Guarapuava", cep: "85010-100" },
-    categorias: ["Italiana", "Pizzaria"],
-    horario: { abertura: "18:00", fechamento: "00:00" },
-    avaliacao_media: 4.3,
-    ativo: true
+    nome: "Ironberg Guarapuava", ativo: true, mensalidade_base: 150.00, plano_minimo_id: idGold,
+    localizacao: { type: "Point", coordinates: [-51.4650, -25.3900] },
+    modalidades: ["Musculação", "Fisiculturismo"],
+    ultimas_avaliacoes: [{ nota: 5, comentario: "Equipamentos de ponta." }, { nota: 4, comentario: "Sempre cheia." }]
   },
   {
-    nome: "Burger House",
-    endereco: { rua: "Rua XV de Novembro", numero: 88, cidade: "Guarapuava", cep: "85010-200" },
-    categorias: ["Hambúrguer", "Fast Food"],
-    horario: { abertura: "11:30", fechamento: "22:00" },
-    avaliacao_media: 4.1,
-    ativo: true
+    nome: "Academia Flex", ativo: true, mensalidade_base: 70.00, plano_minimo_id: idBasic,
+    localizacao: { type: "Point", coordinates: [-51.4700, -25.3850] },
+    modalidades: ["Musculação", "Zumba"],
+    ultimas_avaliacoes: []
   },
   {
-    nome: "Sabor Mineiro",
-    endereco: { rua: "Rua Saldanha Marinho", numero: 300, cidade: "Guarapuava", cep: "85010-300" },
-    categorias: ["Brasileira", "Comida Caseira"],
-    horario: { abertura: "11:00", fechamento: "15:00" },
-    avaliacao_media: 4.5,
-    ativo: true
+    nome: "Crossfit Guarapuava", ativo: true, mensalidade_base: 130.00, plano_minimo_id: idGold,
+    localizacao: { type: "Point", coordinates: [-51.4600, -25.4000] },
+    modalidades: ["Crossfit", "LPO"],
+    ultimas_avaliacoes: [{ nota: 5, comentario: "Box sensacional!" }]
   },
   {
-    nome: "Taco Loco",
-    endereco: { rua: "Rua Benjamin Constant", numero: 55, cidade: "Guarapuava", cep: "85010-400" },
-    categorias: ["Mexicana"],
-    horario: { abertura: "12:00", fechamento: "22:30" },
-    avaliacao_media: 3.9,
-    ativo: false
+    nome: "Studio Pilates Zen", ativo: false, mensalidade_base: 100.00, plano_minimo_id: idSilver,
+    localizacao: { type: "Point", coordinates: [-51.4550, -25.3920] },
+    modalidades: ["Pilates", "Yoga"],
+    ultimas_avaliacoes: [{ nota: 4, comentario: "Muito relaxante, mas fecharam para reforma." }]
   }
 ]);
 
-const restaurantes = db.restaurantes.find().toArray();
-const idSushi = restaurantes[0]._id;
-const idPizzaria = restaurantes[1]._id;
-const idBurger = restaurantes[2]._id;
-const idMineiro = restaurantes[3]._id;
-const idTaco = restaurantes[4]._id;
+const gyms = db.gyms.find().toArray();
+const idUplay = gyms[0]._id;
+const idIronberg = gyms[1]._id;
+const idFlex = gyms[2]._id;
 
-// ── 3. COLEÇÃO: cardapio ─────────────────────────────────────────────────────
-db.createCollection("cardapio");
-db.cardapio.createIndex({ "restaurante_id": 1 });
-db.cardapio.createIndex({ "preco": 1 });
-db.cardapio.createIndex({ "categoria": 1 });
+// ========================================
+// 3. Coleção: users
+// ========================================
+db.createCollection("users");
+db.users.createIndex({ "email": 1 }, { unique: true });
 
-db.cardapio.insertMany([
-  { restaurante_id: idSushi, nome: "Combo Sashimi", descricao: "15 fatias de sashimi variado", preco: 69.90, categoria: "Combos", disponivel: true, ingredientes: ["salmão", "atum", "peixe branco"], alergenos: ["peixe"] },
-  { restaurante_id: idSushi, nome: "Temaki Salmão", descricao: "Temaki de salmão com cream cheese", preco: 28.90, categoria: "Temaki", disponivel: true, ingredientes: ["salmão", "cream cheese", "arroz", "nori"], alergenos: ["peixe", "leite"] },
-  { restaurante_id: idSushi, nome: "Hot Roll", descricao: "8 unidades empanadas com cream cheese", preco: 32.90, categoria: "Empanados", disponivel: true, ingredientes: ["salmão", "cream cheese", "arroz"], alergenos: ["peixe", "leite", "glúten"] },
-  { restaurante_id: idPizzaria, nome: "Pizza Margherita", descricao: "Molho de tomate, mozzarella e manjericão", preco: 45.90, categoria: "Pizzas", disponivel: true, ingredientes: ["molho de tomate", "mozzarella", "manjericão"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idPizzaria, nome: "Pizza Calabresa", descricao: "Calabresa fatiada com cebola", preco: 42.90, categoria: "Pizzas", disponivel: true, ingredientes: ["calabresa", "cebola", "mozzarella"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idPizzaria, nome: "Calzone Frango", descricao: "Calzone recheado com frango e catupiry", preco: 38.90, categoria: "Calzones", disponivel: false, ingredientes: ["frango", "catupiry", "massa"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idBurger, nome: "Classic Burger", descricao: "Hambúrguer artesanal 180g com queijo", preco: 32.90, categoria: "Burgers", disponivel: true, ingredientes: ["carne bovina", "queijo cheddar", "alface", "tomate"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idBurger, nome: "Smash Burger", descricao: "Dois smash patties com cebola caramelizada", preco: 36.90, categoria: "Burgers", disponivel: true, ingredientes: ["carne bovina", "cebola", "queijo", "pão brioche"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idBurger, nome: "Batata Frita G", descricao: "Porção grande de batata frita crocante", preco: 18.90, categoria: "Acompanhamentos", disponivel: true, ingredientes: ["batata"], alergenos: [] },
-  { restaurante_id: idMineiro, nome: "Prato Feito", descricao: "Arroz, feijão, bife, ovo frito e salada", preco: 24.90, categoria: "Pratos", disponivel: true, ingredientes: ["arroz", "feijão", "carne bovina", "ovo"], alergenos: ["ovo"] },
-  { restaurante_id: idMineiro, nome: "Frango com Quiabo", descricao: "Frango caipira com quiabo e angu", preco: 29.90, categoria: "Pratos", disponivel: true, ingredientes: ["frango", "quiabo", "fubá"], alergenos: ["glúten"] },
-  { restaurante_id: idMineiro, nome: "Pão de Queijo (10un)", descricao: "Pão de queijo mineiro artesanal", preco: 15.90, categoria: "Lanches", disponivel: true, ingredientes: ["polvilho", "queijo", "ovo"], alergenos: ["leite", "ovo"] },
-  { restaurante_id: idTaco, nome: "Taco de Carne", descricao: "Tortilha com carne moída temperada", preco: 19.90, categoria: "Tacos", disponivel: true, ingredientes: ["carne moída", "tortilha", "alface", "queijo"], alergenos: ["leite", "glúten"] },
-  { restaurante_id: idTaco, nome: "Burrito Frango", descricao: "Burrito grande com frango desfiado", preco: 28.90, categoria: "Burritos", disponivel: true, ingredientes: ["frango", "arroz", "feijão", "tortilha"], alergenos: ["glúten"] },
-  { restaurante_id: idTaco, nome: "Nachos Supreme", descricao: "Nachos com guacamole e sour cream", preco: 34.90, categoria: "Porções", disponivel: true, ingredientes: ["tortilha chips", "guacamole", "sour cream", "jalapeño"], alergenos: ["leite"] }
+db.users.insertMany([
+  { nome: "Eduardo Fernandes", email: "eduardo@email.com", telefone: "42999990001", plano_id: idGold, data_cadastro: new Date("2026-01-10T10:00:00Z") },
+  { nome: "Ana Clara Novak", email: "ana@email.com", telefone: "42999990002", plano_id: idSilver, data_cadastro: new Date("2026-02-15T14:30:00Z") },
+  { nome: "Matheus Siqueira", email: "matheus@email.com", telefone: "42999990003", plano_id: idBasic, data_cadastro: new Date("2026-03-20T09:15:00Z") },
+  { nome: "Lucas Silva", email: "lucas@email.com", telefone: "42999990004", plano_id: idGold, data_cadastro: new Date("2026-04-05T18:00:00Z") },
+  { nome: "Mariana Costa", email: "mariana@email.com", telefone: "42999990005", plano_id: idBasic, data_cadastro: new Date("2026-05-12T11:45:00Z") }
 ]);
 
-// ── 4. COLEÇÃO: clientes ─────────────────────────────────────────────────────
-db.createCollection("clientes");
-db.clientes.createIndex({ "email": 1 }, { unique: true });
-db.clientes.createIndex({ "telefone": 1 });
+const users = db.users.find().toArray();
+const idEduardo = users[0]._id;
+const idAna = users[1]._id;
+const idMatheus = users[2]._id;
 
-db.clientes.insertMany([
-  {
-    nome: "Ana Silva",
-    email: "ana@email.com",
-    telefone: "42999001001",
-    enderecos: [
-      { rua: "Rua Guaíra", numero: 200, cidade: "Guarapuava", cep: "85015-000", principal: true },
-      { rua: "Rua Ponta Grossa", numero: 50, cidade: "Guarapuava", cep: "85015-100", principal: false }
-    ],
-    favoritos: [idSushi, idBurger]
-  },
-  {
-    nome: "Bruno Costa",
-    email: "bruno@email.com",
-    telefone: "42999002002",
-    enderecos: [
-      { rua: "Av. Manoel Ribas", numero: 1500, cidade: "Guarapuava", cep: "85010-500", principal: true }
-    ],
-    favoritos: [idPizzaria]
-  },
-  {
-    nome: "Carla Mendes",
-    email: "carla@email.com",
-    telefone: "42999003003",
-    enderecos: [
-      { rua: "Rua Saldanha Marinho", numero: 800, cidade: "Guarapuava", cep: "85010-300", principal: true }
-    ],
-    favoritos: [idMineiro, idSushi]
-  }
+// ========================================
+// 4. Coleção: checkins
+// ========================================
+db.createCollection("checkins");
+db.checkins.createIndex({ "user_id": 1 });
+
+db.checkins.insertMany([
+  { user_id: idEduardo, gym: { gym_id: idUplay, nome: "Uplay Guarapuava" }, data_hora: new Date("2026-09-10T18:30:00Z"), status: "validado" },
+  { user_id: idEduardo, gym: { gym_id: idIronberg, nome: "Ironberg Guarapuava" }, data_hora: new Date("2026-09-12T19:00:00Z"), status: "validado" },
+  { user_id: idAna, gym: { gym_id: idUplay, nome: "Uplay Guarapuava" }, data_hora: new Date("2026-09-14T07:30:00Z"), status: "validado" },
+  { user_id: idMatheus, gym: { gym_id: idFlex, nome: "Academia Flex" }, data_hora: new Date("2026-09-15T18:00:00Z"), status: "pendente" },
+  { user_id: idAna, gym: { gym_id: idFlex, nome: "Academia Flex" }, data_hora: new Date("2026-09-15T19:15:00Z"), status: "cancelado" }
 ]);
 
-print("=== [MongoDB] Inicialização concluída com sucesso! ===");
+// ========================================
+// 5. Coleção: reviews
+// ========================================
+db.createCollection("reviews");
+db.reviews.insertMany([
+  { user_id: idEduardo, gym_id: idIronberg, nota: 5, comentario: "Equipamentos de ponta.", data: new Date("2026-09-13T10:00:00Z") },
+  { user_id: idAna, gym_id: idUplay, nota: 5, comentario: "Ótima estrutura.", data: new Date("2026-09-14T09:00:00Z") },
+  { user_id: idMatheus, gym_id: idFlex, nota: 3, comentario: "Aparelhos um pouco antigos, mas quebra o galho.", data: new Date("2026-09-15T20:00:00Z") },
+  { user_id: idEduardo, gym_id: idUplay, nota: 4, comentario: "Muito cheia às 18h.", data: new Date("2026-09-10T21:00:00Z") }
+]);
+
+print("=== TREINNA inicializado com sucesso! ===");
+print("Planos: " + db.plans.countDocuments());
+print("Academias: " + db.gyms.countDocuments());
+print("Usuários: " + db.users.countDocuments());
+print("Check-ins: " + db.checkins.countDocuments());
+print("Reviews: " + db.reviews.countDocuments());
+print("Total de documentos gerados: 22");

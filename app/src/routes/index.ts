@@ -1,5 +1,7 @@
 import { Router, Request, Response } from "express";
-import itensRoutes from "./itens.routes.js";
+import gymsRoutes from "./gyms.routes.js";
+import checkinsRoutes from "./checkins.routes.js";
+import usersRoutes from "./users.routes.js";
 import { getDb } from "../database/mongo.js";
 import { getRedisClient } from "../database/redis.js";
 import { getElasticClient } from "../database/elastic.js";
@@ -48,7 +50,9 @@ routes.get("/health", async (req: Request, res: Response) => {
   res.status(httpStatus).json(status);
 });
 
-// Rota da coleção simples (GET /api/itens)
-routes.use("/itens", itensRoutes);
+// Rotas do Treinna
+routes.use("/gyms", gymsRoutes);
+routes.use("/checkins", checkinsRoutes);
+routes.use("/users", usersRoutes);
 
 export default routes;
