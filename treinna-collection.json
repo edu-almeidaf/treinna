@@ -1,0 +1,90 @@
+{
+  "info": {
+    "name": "Treinna API - Checkpoint 1",
+    "description": "Coleção de testes para as 5 consultas exigidas na API do Treinna.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Academias Próximas (Radar)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3400/api/gyms/near?lng=-51.4628&lat=-25.3953&distanciaMetros=5000",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3400",
+          "path": ["api", "gyms", "near"],
+          "query": [
+            { "key": "lng", "value": "-51.4628" },
+            { "key": "lat", "value": "-25.3953" },
+            { "key": "distanciaMetros", "value": "5000" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "2. Busca de Academias por Modalidade",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3400/api/gyms/search?modalidade=Crossfit",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3400",
+          "path": ["api", "gyms", "search"],
+          "query": [
+            { "key": "modalidade", "value": "Crossfit" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. Histórico de Check-ins do Aluno",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3400/api/checkins/user/COLE_O_ID_DO_USUARIO_AQUI",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3400",
+          "path": ["api", "checkins", "user", "COLE_O_ID_DO_USUARIO_AQUI"]
+        }
+      }
+    },
+    {
+      "name": "4. Validar Entrada na Catraca",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3400/api/checkins/COLE_O_ID_DO_CHECKIN_AQUI/validar",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3400",
+          "path": ["api", "checkins", "COLE_O_ID_DO_CHECKIN_AQUI", "validar"]
+        }
+      }
+    },
+    {
+      "name": "5. Upgrade de Plano do Aluno",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"novoPlanoId\": \"COLE_O_ID_DO_NOVO_PLANO_AQUI\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3400/api/users/COLE_O_ID_DO_USUARIO_AQUI/plano",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3400",
+          "path": ["api", "users", "COLE_O_ID_DO_USUARIO_AQUI", "plano"]
+        }
+      }
+    }
+  ]
+}
