@@ -2,10 +2,12 @@ import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { getCollection } from "../database/mongo.js";
 import { getElasticClient } from "../database/elastic.js";
-import { cacheDel, listPush, listPop, listRange } from "../database/redis.js";
+import { cacheGet, cacheSet, cacheDel, listPush, listPop, listRange } from "../database/redis.js";
 import { montarDocumentoBusca } from "../scripts/seed-elastic.js";
 
 const CHAVE_PENDENTES = "treinna:sync:pendentes";
+const TTL_GYM_SEGUNDOS = 300;
+const idValido = (id: string) => /^[0-9a-f]{24}$/i.test(id);
 
 export class GymsController {
   static async listarProximas(req: Request, res: Response): Promise<void> {
@@ -32,6 +34,35 @@ export class GymsController {
       }).toArray();
 
       res.json(academias);
+    } catch (err: any) {
+      res.status(500).json({ erro: err.message });
+    }
+  }
+
+  static async obter(req: Request, res: Response): Promise<void> {
+    const t0 = performance.now();
+    try {
+      const { id } = req.params;
+      if (!idValido(id)) {
+        res.status(400).json({ erro: "ID de academia inválido." });
+        return;
+      }
+
+      const chave = `treinna:gym:${id}`;
+      const cached = await cacheGet<any>(chave);
+      if (cached) {
+        res.json({ origem: "REDIS (CACHE HIT)", tempo_resposta: `${(performance.now() - t0).toFixed(2)} ms`, academia: cached });
+        return;
+      }
+
+      const gym = await getCollection("gyms").findOne({ _id: new ObjectId(id) });
+      if (!gym) {
+        res.status(404).json({ erro: "Academia não encontrada." });
+        return;
+      }
+
+      await cacheSet(chave, gym, TTL_GYM_SEGUNDOS);
+      res.json({ origem: "MONGODB (CACHE MISS)", tempo_resposta: `${(performance.now() - t0).toFixed(2)} ms`, academia: gym });
     } catch (err: any) {
       res.status(500).json({ erro: err.message });
     }
@@ -91,12 +122,21 @@ export class GymsController {
   static async atualizar(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      if (!idValido(id)) {
+        res.status(400).json({ erro: "ID de academia inválido." });
+        return;
+      }
       const { nome, ativo, mensalidade_base } = req.body;
 
       const alteracoes: any = {};
       if (nome !== undefined) alteracoes.nome = String(nome);
       if (ativo !== undefined) alteracoes.ativo = Boolean(ativo);
       if (mensalidade_base !== undefined) alteracoes.mensalidade_base = Number(mensalidade_base);
+
+      if (Object.keys(alteracoes).length === 0) {
+        res.status(400).json({ erro: "Informe ao menos um campo: nome, ativo ou mensalidade_base." });
+        return;
+      }
 
       const col = getCollection("gyms");
       const gymAtualizada = await col.findOneAndUpdate(
@@ -153,6 +193,7 @@ export class GymsController {
       let id: string | null;
 
       while ((id = await listPop(CHAVE_PENDENTES)) !== null) {
+        if (!idValido(id)) continue;
         const gym = await getCollection("gyms").findOne({ _id: new ObjectId(id) });
         if (!gym) continue;
 

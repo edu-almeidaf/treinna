@@ -18,12 +18,14 @@ app.use(express.json());
 // Rota raiz com mapa simples da API
 app.get("/", (req: Request, res: Response) => {
   res.json({
-    titulo: "UTFPR — NoSQL Starter App",
+    titulo: "Treinna — App de Check-in em Academias",
     disciplina: "Banco de Dados NoSQL (TSI34E-TSI4)",
     professor: "Prof. Marcelo Vichar",
     endpoints: {
       health: "GET /api/health",
-      itens_simples: "GET /api/itens",
+      planos: "GET /api/plans",
+      busca: "GET /api/gyms/search?q=",
+      ranking: "GET /api/gyms/ranking/top",
     },
     interfaces_web: {
       elasticvue: "http://localhost:8400",
@@ -64,7 +66,6 @@ async function bootstrap() {
     console.log("\n🚀 Servidor Express rodando com sucesso!");
     console.log(`📡 URL Principal: http://localhost:${PORT}`);
     console.log(`🩺 Health Check:  http://localhost:${PORT}/api/health`);
-    console.log(`📦 Simple Coleção: http://localhost:${PORT}/api/itens`);
     console.log("=======================================================\n");
   });
 

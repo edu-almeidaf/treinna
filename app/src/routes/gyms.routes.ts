@@ -13,6 +13,7 @@ router.get("/ranking/top", GymsRankingController.listarTop);
 router.get("/sincronizacao/pendentes", GymsController.listarPendentes);
 router.post("/sincronizacao/reprocessar", GymsController.reprocessar);
 
+router.get("/:id", GymsController.obter);
 router.patch("/:id", GymsController.atualizar);
 
 export default router;

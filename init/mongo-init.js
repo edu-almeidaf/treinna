@@ -30,31 +30,31 @@ db.gyms.createIndex({ "ativo": 1 });
 
 db.gyms.insertMany([
   {
-    nome: "Uplay Guarapuava", ativo: true, mensalidade_base: 120.50, plano_minimo_id: idSilver,
+    nome: "Uplay Guarapuava", cidade: "Guarapuava", ativo: true, mensalidade_base: 120.50, plano_minimo_id: idSilver,
     localizacao: { type: "Point", coordinates: [-51.4628, -25.3953] },
     modalidades: ["Musculação", "Crossfit", "Muay Thai"],
     ultimas_avaliacoes: [{ nota: 5, comentario: "Ótima estrutura." }]
   },
   {
-    nome: "Ironberg Guarapuava", ativo: true, mensalidade_base: 150.00, plano_minimo_id: idGold,
+    nome: "Ironberg Guarapuava", cidade: "Guarapuava", ativo: true, mensalidade_base: 150.00, plano_minimo_id: idGold,
     localizacao: { type: "Point", coordinates: [-51.4650, -25.3900] },
     modalidades: ["Musculação", "Fisiculturismo"],
     ultimas_avaliacoes: [{ nota: 5, comentario: "Equipamentos de ponta." }, { nota: 4, comentario: "Sempre cheia." }]
   },
   {
-    nome: "Academia Flex", ativo: true, mensalidade_base: 70.00, plano_minimo_id: idBasic,
+    nome: "Academia Flex", cidade: "Guarapuava", ativo: true, mensalidade_base: 70.00, plano_minimo_id: idBasic,
     localizacao: { type: "Point", coordinates: [-51.4700, -25.3850] },
     modalidades: ["Musculação", "Zumba"],
     ultimas_avaliacoes: []
   },
   {
-    nome: "Crossfit Guarapuava", ativo: true, mensalidade_base: 130.00, plano_minimo_id: idGold,
+    nome: "Crossfit Guarapuava", cidade: "Guarapuava", ativo: true, mensalidade_base: 130.00, plano_minimo_id: idGold,
     localizacao: { type: "Point", coordinates: [-51.4600, -25.4000] },
     modalidades: ["Crossfit", "LPO"],
     ultimas_avaliacoes: [{ nota: 5, comentario: "Box sensacional!" }]
   },
   {
-    nome: "Studio Pilates Zen", ativo: false, mensalidade_base: 100.00, plano_minimo_id: idSilver,
+    nome: "Studio Pilates Zen", cidade: "Guarapuava", ativo: false, mensalidade_base: 100.00, plano_minimo_id: idSilver,
     localizacao: { type: "Point", coordinates: [-51.4550, -25.3920] },
     modalidades: ["Pilates", "Yoga"],
     ultimas_avaliacoes: [{ nota: 4, comentario: "Muito relaxante, mas fecharam para reforma." }]

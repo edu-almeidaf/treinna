@@ -47,7 +47,7 @@ Para evitar conflitos com outros programas locais do Ubuntu, utilizamos portas d
 | :--- | :--- | :--- | :--- |
 | **API Starter (Express + TS)** | [http://localhost:3400](http://localhost:3400) | Aplicação com hot-reload ativo | Sem autenticação |
 | **ElasticVue (Elasticsearch)** | [http://localhost:8400](http://localhost:8400) | Interface visual para explorar índices e buscas | Conecta em `http://localhost:9200` |
-| **Mongo Express (MongoDB)** | [http://localhost:8401](http://localhost:8401) | Visualizar coleções do banco **GastroHub** | Já conecta autenticado |
+| **Mongo Express (MongoDB)** | [http://localhost:8401](http://localhost:8401) | Visualizar coleções do banco **Treinna** | Já conecta autenticado |
 | **Redis Commander (Redis)** | [http://localhost:8402](http://localhost:8402) | Inspecionar chaves, TTLs e valores em memória | Sem necessidade de login |
 | **MongoDB (Porta direta)** | `localhost:27034` | Conexão para Compass, DBeaver ou VS Code | `root` / `root` |
 | **Redis (Porta direta)** | `localhost:6334` | Conexão direta TCP | Sem senha |
@@ -58,8 +58,12 @@ Para evitar conflitos com outros programas locais do Ubuntu, utilizamos portas d
 ## 📡 Endpoints Prontos para Testar
 
 - **Health Check dos 3 Bancos:** [http://localhost:3400/api/health](http://localhost:3400/api/health)
-- **Simple Collection (GET /api/itens):** [http://localhost:3400/api/itens](http://localhost:3400/api/itens)
-  - *Dica:* Na 1ª requisição, você verá `origem: "MONGODB (Salvo no Redis por 60s)"`. Na 2ª requisição, você verá `origem: "REDIS_CACHE (< 2ms)"`!
+- **Planos (cache-aside):** `GET /api/plans`
+- **Busca de academias (Elasticsearch):** `GET /api/gyms/search?q=crosfit&preco_max=100`
+- **Detalhe de academia (cache):** `GET /api/gyms/:id`
+- **Ranking (Sorted Set):** `GET /api/gyms/ranking/top?limite=5`
+- **Escrita sincronizada:** `PATCH /api/gyms/:id`
+- Roteiro completo com saídas esperadas: [CHECKPOINT_2.md](CHECKPOINT_2.md)
 
 ---
 
@@ -74,51 +78,11 @@ Quando você editar e salvar qualquer arquivo em `app/src/` no seu VS Code, o se
 
 ```
 app/src/
-├── database/            # Conexões prontas (Singletons)
-│   ├── mongo.ts         # getDb(), getCollection("colecao")
-│   ├── redis.ts         # getRedisClient(), cacheGet(), cacheSet()
-│   └── elastic.ts       # getElasticClient()
-├── controllers/         # Funções que tratam requisições e acessam os bancos
-│   └── itens.controller.ts  # Controller com GET pronto e simples!
-└── routes/              # Mapeamento de rotas HTTP
-    ├── index.ts         # Health check e agregador
-    └── itens.routes.ts  # Rota GET /api/itens
+├── database/     # Conexões e helpers (mongo.ts, redis.ts, elastic.ts)
+├── controllers/  # gyms, gyms-ranking, plans, checkins, users
+├── routes/       # Mapeamento de rotas HTTP (index.ts agrega)
+└── scripts/      # seed-elastic.ts: carga do índice a partir do MongoDB
 ```
-
-### Exemplo: Como adicionar uma nova função no controller
-
-Abra `app/src/controllers/itens.controller.ts` e adicione seu método:
-
-```typescript
-import { Request, Response } from "express";
-import { getCollection } from "../database/mongo.js";
-import { cacheSet, cacheGet } from "../database/redis.js";
-
-export class ItensController {
-  // 1. Método que já vem pronto:
-  static async listar(req: Request, res: Response): Promise<void> { ... }
-
-  // 2. Novo método adicionado durante a aula:
-  static async buscarPorCategoria(req: Request, res: Response): Promise<void> {
-    try {
-      const col = getCollection("itens");
-      const categoria = req.params.categoria;
-      const resultados = await col.find({ categoria }).toArray();
-      res.json({ total: resultados.length, resultados });
-    } catch (err: any) {
-      res.status(500).json({ erro: err.message });
-    }
-  }
-}
-```
-
-E registre a rota em `app/src/routes/itens.routes.ts`:
-
-```typescript
-router.get("/categoria/:categoria", ItensController.buscarPorCategoria);
-```
-
-Ao salvar o arquivo (`Ctrl + S`), teste em: `http://localhost:3400/api/itens/categoria/Pizzas`.
 
 ---
 
@@ -155,7 +119,7 @@ init/
   ```bash
   ./parar.sh
   ```
-- **Resetar tudo para o estado original de fábrica (GastroHub limpo):**
+- **Resetar tudo para o estado original de fábrica (Treinna limpo):**
   ```bash
   ./reset.sh
   ```

@@ -25,7 +25,7 @@ export function montarDocumentoBusca(gym: any) {
     gym_id: gym._id.toString(),
     nome: gym.nome,
     modalidades: Array.isArray(gym.modalidades) ? gym.modalidades.join(", ") : gym.modalidades,
-    cidade: gym.localizacao?.cidade || "",
+    cidade: gym.cidade || "",
     ativo: gym.ativo === true,
     mensalidade_base: gym.mensalidade_base || 0,
   };

@@ -32,9 +32,9 @@ flowchart LR
 | Entidade / Dado | Fonte da Verdade | Cópias Derivadas | Justificativa Arquitetural da Cópia |
 | :--- | :--- | :--- | :--- |
 | **Planos de Assinatura** | MongoDB (`plans`) | Redis (`treinna:plans:todos`) | Vitrine pública lida milhares de vezes ao dia; preços mudam raramente. O cache elimina I/O em disco. |
-| **Academias Parceiras** | MongoDB (`gyms`) | Elasticsearch (`academias`) e Redis (`treinna:gym:<id>`) | A busca exige tolerância a erros de digitação (`fuzziness`) e relevância ponderada por modalidades. |
+| **Academias Parceiras** | MongoDB (`gyms`) | Elasticsearch (`academias`) e Redis (`treinna:gym:<id>`, TTL 300 s, via `GET /api/gyms/:id`) | O índice permite busca com tolerância a erros de digitação (`fuzziness`) e relevância ponderada; o cache acelera a tela de detalhe. |
 | **Check-ins e Validações** | MongoDB (`checkins`) | Nenhuma cópia permanente | Transação crítica de acesso e faturamento de repasse; exige consistência estrita imediata. |
-| **Ranking de Frequência** | MongoDB (`checkins`) | Redis Sorted Set (`treinna:ranking:gyms`) | Evita agregações pesadas (`$group` + `$sort`) a cada abertura da home. O ZSet mantém a ordenação em RAM. |
+| **Ranking de Frequência** | MongoDB (`checkins`) | Redis Sorted Set (`treinna:ranking:gyms`) | Evita agregações pesadas (`$group` + `$sort`) a cada abertura da home. O ZSet é incrementado a cada check-in validado e mantém a ordenação em RAM. Como é derivado, pode ser reconstruído a partir dos check-ins validados. |
 | **Histórico e Alunos** | MongoDB (`users`) | Nenhuma cópia permanente | Perfil e credenciais com ciclo de vida estritamente acoplado ao banco principal. |
 
 ---
@@ -53,7 +53,7 @@ flowchart LR
 
 **Justificativa do TTL:** Planos de academia (Basic, Silver, Gold) são alterados esporadicamente pelo departamento comercial. Cinco minutos evitam sobrecarga de leitura e servem de salvaguarda caso ocorram alterações externas fora do ciclo da aplicação.
 
-**Invalidação Ativa:** Caso qualquer rota administrativa altere valores ou benefícios dos planos (`PATCH /api/plans/:id`), o backend executa imediatamente `await cacheDel("treinna:plans:todos")`, forçando a leitura seguinte a buscar os dados atualizados no MongoDB.
+**Invalidação Ativa:** Quando o preço de um plano é alterado (`PATCH /api/plans/:id/preco`), o backend executa imediatamente `await cacheDel("treinna:plans:todos")`, forçando a leitura seguinte a buscar os dados atualizados no MongoDB.
 
 ---
 
@@ -64,8 +64,8 @@ flowchart LR
 **Padrão de Nomenclatura:** `treinna:ranking:gyms`  
 
 ### Comandos Utilizados:
-* `ZINCRBY treinna:ranking:gyms 1 "<Nome ou ID da Academia>"`: Disparado atomicamente na validação de entrada na catraca (`PATCH /api/checkins/:id/validar`), incrementando o score em memória sem onerar o MongoDB.
-* `ZREVRANGE treinna:ranking:gyms 0 4 WITHSCORES`: Consumido pelo endpoint `GET /api/gyms/ranking?limite=5`, recuperando o Top 5 instantaneamente em complexidade $O(\log N)$.
+* `ZINCRBY treinna:ranking:gyms 1 "<Nome da Academia>"`: Disparado na validação de entrada na catraca (`PATCH /api/checkins/:id/validar`), somente na transição para `validado` (validar de novo não duplica a contagem). Se o Redis falhar, a validação no MongoDB é mantida. O endpoint `POST /api/gyms/ranking/checkin` permite simular acessos em massa na demonstração.
+* `ZREVRANGE treinna:ranking:gyms 0 4 WITHSCORES`: Consumido pelo endpoint `GET /api/gyms/ranking/top?limite=5`, recuperando o Top 5 instantaneamente em complexidade $O(\log N)$.
 
 **Justificativa:** O cálculo de ranking a partir de milhões de documentos históricos no MongoDB exigiria agregação analítica contínua e pesada. O Sorted Set armazena e reordena os dados de maneira incremental diretamente na memória RAM.
 
@@ -90,7 +90,7 @@ flowchart LR
 
 *Nota de Conformidade:* O parâmetro obsoleto `boost` não é utilizado no mapping estrutural (incompatível com o Elasticsearch 8.x); os pesos são atribuídos em tempo de consulta.
 
-**Sincronização Inicial:** O script `app/src/scripts/seed-elastic.ts` lê a coleção `gyms` do MongoDB no startup e popula o índice `academias` com mapeamento Geo/Textual, sendo invocado automaticamente pelo `./iniciar.sh`.
+**Sincronização Inicial:** O script `app/src/scripts/seed-elastic.ts` lê a coleção `gyms` do MongoDB no startup e popula o índice `academias` (`nome`, `modalidades`, `cidade`, `ativo`, `mensalidade_base`), sendo invocado automaticamente pelo `./iniciar.sh`. O campo `cidade` vem do documento da academia no MongoDB.
 
 ---
 
@@ -117,7 +117,7 @@ flowchart LR
 
 ### Ordem Estrita das Operações:
 1. **Passo 1 (MongoDB):** Atualiza os dados via `findOneAndUpdate` e recupera o documento modificado. Se a gravação falhar, o processo aborta sem alterar os demais bancos.
-2. **Passo 2 (Redis):** Invalida o cache individual e de listagens (`cacheDel`).
+2. **Passo 2 (Redis):** Invalida o cache individual da academia, `treinna:gym:<id>` (`cacheDel`).
 3. **Passo 3 (Elasticsearch):** Executa `elastic.index()` com o ID da academia e a flag `refresh: "wait_for"`, garantindo visibilidade imediata no motor de busca.
 
 ### Respostas aos Critérios de Sincronização:
@@ -127,7 +127,7 @@ flowchart LR
 * **Na Busca (Elasticsearch):** Imediatamente ao término da requisição HTTP, graças ao uso de `refresh: "wait_for"`. Sem essa flag, o dado apareceria no ciclo de refresh automático do cluster (em até 1 segundo).
 
 **2. O que acontece se a gravação no MongoDB der certo e a atualização do Elasticsearch falhar?**  
-A alteração **não é desfeita no MongoDB**, pois ele é a Fonte da Verdade. A API captura a falha em bloco `try/catch`, registra o `_id` da academia no final de uma List no Redis (`treinna:sync:pendentes`) e devolve o status `HTTP 202 Accepted` avisando que a sincronização foi agendada. Um endpoint de reprocessamento (`POST /api/sync/reprocessar`) desempilha os IDs da fila e reindexa os documentos lendo o estado atual do MongoDB.
+A alteração **não é desfeita no MongoDB**, pois ele é a Fonte da Verdade. A API captura a falha em bloco `try/catch`, registra o `_id` da academia no final de uma List no Redis (`treinna:sync:pendentes`) e devolve o status `HTTP 202 Accepted` avisando que a sincronização foi agendada. Um endpoint de reprocessamento (`POST /api/gyms/sincronizacao/reprocessar`; a fila pode ser consultada em `GET /api/gyms/sincronizacao/pendentes`) desempilha os IDs da fila e reindexa os documentos lendo o estado atual do MongoDB.
 
 ---
 
@@ -143,7 +143,7 @@ curl -s http://localhost:3400/api/plans | jq '{origem, tempo_resposta, total}'
 # 2ª Requisição imediata (Cache Hit - responde da RAM)
 curl -s http://localhost:3400/api/plans | jq '{origem, tempo_resposta, total}'
 ```
-*Saída Esperada:* Origem `MONGODB (CACHE MISS)` com tempo superior a 2ms na primeira chamada; origem `REDIS (CACHE HIT)` com tempo sub-milissegundo (< 0.8ms) na segunda.
+*Saída Esperada:* Origem `MONGODB (CACHE MISS)` na primeira chamada (alguns ms) e `REDIS (CACHE HIT)` na segunda, com tempo bem menor (em torno de 1 ms ou menos; o valor exato varia por máquina).
 
 ### 7.2. Estrutura Avançada do Redis (Sorted Set)
 ```bash
@@ -154,6 +154,8 @@ curl -s -X POST http://localhost:3400/api/gyms/ranking/checkin -H "Content-Type:
 # Consultar o Top 2 Academias mais frequentadas
 curl -s "http://localhost:3400/api/gyms/ranking/top?limite=2" | jq .
 ```
+Opcionalmente, valide um check-in real (`PATCH /api/checkins/<ID>/validar`): o score da academia correspondente sobe +1.
+
 *Saída Esperada:* Ironberg em 1º lugar (score 5) e Uplay em 2º lugar (score 3) ordenados em tempo real pelo Redis.
 
 ### 7.3. Busca com Erro de Digitação (Fuzzy Match)
@@ -166,18 +168,31 @@ curl -s "http://localhost:3400/api/gyms/search?q=crosfit" | jq '[.resultados[] |
 ### 7.4. Busca com Filtro Exato
 ```bash
 # Busca textual com filtro de preço máximo
-curl -s "http://localhost:3400/api/gyms/search?q=musculacao&preco_max=100" | jq '{total, academias: [.resultados[].nome]}'
+curl -s "http://localhost:3400/api/gyms/search?q=musculacao&preco_max=100&cidade=Guarapuava" | jq '{total, academias: [.resultados[].nome]}'
 ```
 *Saída Esperada:* Retorna apenas "Academia Flex" (R$ 70,00), eliminando academias que ultrapassam o teto estipulado.
 
 ### 7.5. Escrita Sincronizada e Invalidação
 ```bash
+# Ler a academia (miss, depois hit) para popular o cache
+curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem}'
+curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem}'
+
 # Atualizar nome da academia com sincronização tripla
 curl -s -X PATCH "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" \
   -H "Content-Type: application/json" \
   -d '{"nome": "Uplay Prime Guarapuava"}' | jq .
 
-# Conferir na busca textual
+# Conferir na busca textual e na leitura (cache invalidado => novo MISS com o nome novo)
 curl -s "http://localhost:3400/api/gyms/search?q=prime" | jq '.resultados[0].nome'
+curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem, nome: .academia.nome}'
 ```
-*Saída Esperada:* A mutação retorna confirmação nos 3 bancos e a busca por "prime" já localiza o documento atualizado imediatamente.
+*Saída Esperada:* A mutação retorna `mongodb: gravado`, `redis: invalidado` e `elasticsearch: atualizado (1 documento)`; a busca por "prime" já localiza o documento e a leitura seguinte vem de `MONGODB (CACHE MISS)` com o nome novo. (O ID pode ser obtido com `curl -s "http://localhost:3400/api/gyms/near?lng=-51.4628&lat=-25.3953" | jq -r '.[0]._id'`.)
+
+### 7.6. Falha do Elasticsearch e Reprocessamento
+```bash
+curl -s -X PATCH "http://localhost:3400/api/gyms/COLE_O_ID_AQUI?simular_falha=elastic" -H "Content-Type: application/json" -d '{"mensalidade_base": 99}' -w ' [%{http_code}]\n'
+curl -s http://localhost:3400/api/gyms/sincronizacao/pendentes | jq .
+curl -s -X POST http://localhost:3400/api/gyms/sincronizacao/reprocessar | jq .
+```
+*Saída Esperada:* HTTP 202 com `elasticsearch: falhou (...)`; a fila lista 1 ID; o reprocessamento retorna `reprocessadas_total: 1` e a fila fica vazia.
