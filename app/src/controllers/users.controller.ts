@@ -3,7 +3,6 @@ import { ObjectId } from "mongodb";
 import { getCollection } from "../database/mongo.js";
 
 export class UsersController {
-  // 5. Upgrade de Plano do Aluno - Atualização de referência
   static async atualizarPlano(req: Request, res: Response): Promise<void> {
     try {
       const { novoPlanoId } = req.body;

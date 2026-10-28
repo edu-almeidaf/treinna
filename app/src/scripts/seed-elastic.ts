@@ -20,10 +20,6 @@ function getElasticInitConfig() {
   throw new Error("Arquivo init/elastic-init.json não encontrado.");
 }
 
-/**
- * Monta o documento do índice "academias" a partir de um documento do MongoDB.
- * Achata as propriedades aninhadas para facilitar a busca no Elasticsearch.
- */
 export function montarDocumentoBusca(gym: any) {
   return {
     gym_id: gym._id.toString(),
@@ -45,7 +41,6 @@ export async function seedElasticsearch(keepConnectionsOpen = false) {
   const indexName = "academias";
   const initConfig = getElasticInitConfig();
 
-  // 1. Recria o índice com base no arquivo declarativo
   const indexExists = await elastic.indices.exists({ index: indexName });
   if (indexExists) {
     console.log(`[Elasticsearch] Índice '${indexName}' já existe. Recriando...`);
@@ -58,11 +53,9 @@ export async function seedElasticsearch(keepConnectionsOpen = false) {
     mappings: initConfig.mappings,
   });
 
-  // 2. Busca todas as academias no MongoDB Treinna
   const colGyms = getCollection("gyms");
   const gyms = await colGyms.find().toArray();
 
-  // 3. Indexa academia por academia
   let count = 0;
   for (const gym of gyms) {
     await elastic.index({
@@ -84,7 +77,6 @@ export async function seedElasticsearch(keepConnectionsOpen = false) {
   return count;
 }
 
-// Execução direta via CLI
 if (process.argv[1] && process.argv[1].includes("seed-elastic")) {
   seedElasticsearch().catch((err) => {
     console.error("Erro ao popular Elasticsearch:", err);

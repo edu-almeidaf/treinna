@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import gymsRoutes from "./gyms.routes.js";
 import checkinsRoutes from "./checkins.routes.js";
+import plansRoutes from "./plans.routes.js";
 import usersRoutes from "./users.routes.js";
 import { getDb } from "../database/mongo.js";
 import { getRedisClient } from "../database/redis.js";
@@ -54,5 +55,6 @@ routes.get("/health", async (req: Request, res: Response) => {
 routes.use("/gyms", gymsRoutes);
 routes.use("/checkins", checkinsRoutes);
 routes.use("/users", usersRoutes);
+routes.use("/plans", plansRoutes);
 
 export default routes;

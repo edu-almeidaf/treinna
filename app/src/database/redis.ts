@@ -63,3 +63,20 @@ export async function closeRedis(): Promise<void> {
     console.log("[Redis] Conexão encerrada.");
   }
 }
+
+export async function zsetIncr(key: string, member: string, increment = 1): Promise<string> {
+  const client = getRedisClient();
+  return client.zincrby(key, increment, member);
+}
+
+export async function zsetRevRangeWithScores(key: string, start = 0, stop = 9): Promise<Array<{ member: string; score: number }>> {
+  const client = getRedisClient();
+  const raw = await client.zrevrange(key, start, stop, "WITHSCORES");
+  const result: Array<{ member: string; score: number }> = [];
+  
+  for (let i = 0; i < raw.length; i += 2) {
+    result.push({ member: raw[i], score: parseFloat(raw[i + 1]) });
+  }
+  
+  return result;
+}

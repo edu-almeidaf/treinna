@@ -3,7 +3,6 @@ import { ObjectId } from "mongodb";
 import { getCollection } from "../database/mongo.js";
 
 export class CheckinsController {
-  // 2. Histórico de Check-ins do Aluno - Leitura otimizada
   static async historicoUsuario(req: Request, res: Response): Promise<void> {
     try {
       const col = getCollection("checkins");
@@ -18,7 +17,6 @@ export class CheckinsController {
     }
   }
 
-  // 4. Validar Entrada na Catraca - Atualização atômica ($set)
   static async validarAcesso(req: Request, res: Response): Promise<void> {
     try {
       const col = getCollection("checkins");
