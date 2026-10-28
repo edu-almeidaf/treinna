@@ -80,3 +80,18 @@ export async function zsetRevRangeWithScores(key: string, start = 0, stop = 9): 
   
   return result;
 }
+
+export async function listPush(key: string, value: string, direction: "left" | "right" = "right"): Promise<number> {
+  const client = getRedisClient();
+  return direction === "right" ? client.rpush(key, value) : client.lpush(key, value);
+}
+
+export async function listPop(key: string, direction: "left" | "right" = "left"): Promise<string | null> {
+  const client = getRedisClient();
+  return direction === "left" ? client.lpop(key) : client.rpop(key);
+}
+
+export async function listRange(key: string, start = 0, stop = -1): Promise<string[]> {
+  const client = getRedisClient();
+  return client.lrange(key, start, stop);
+}
