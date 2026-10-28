@@ -2,7 +2,7 @@
 **Disciplina:** Banco de Dados NoSQL (TSI34E-TSI4) — UTFPR Câmpus Guarapuava  
 **Professor:** Prof. Marcelo Marcos Vichar Junior  
 **Alunos:** Ana Clara Novak, Eduardo de Almeida Fernandes, Matheus Lorenzo Siqueira  
-**Data:** 25/10/2026  
+**Data:** 27/10/2026  
 
 ---
 
@@ -36,6 +36,9 @@ flowchart LR
 | **Check-ins e Validações** | MongoDB (`checkins`) | Nenhuma cópia permanente | Transação crítica de acesso e faturamento de repasse; exige consistência estrita imediata. |
 | **Ranking de Frequência** | MongoDB (`checkins`) | Redis Sorted Set (`treinna:ranking:gyms`) | Evita agregações pesadas (`$group` + `$sort`) a cada abertura da home. O ZSet é incrementado a cada check-in validado e mantém a ordenação em RAM. Como é derivado, pode ser reconstruído a partir dos check-ins validados. |
 | **Histórico e Alunos** | MongoDB (`users`) | Nenhuma cópia permanente | Perfil e credenciais com ciclo de vida estritamente acoplado ao banco principal. |
+| **Avaliações das Academias** | MongoDB (`reviews`) | MongoDB (`gyms.ultimas_avaliacoes`, subconjunto embutido) e, por consequência, Redis (`treinna:gym:<id>`) | As avaliações completas ficam em `reviews`; as mais recentes são embutidas na academia (padrão *Subset* do Checkpoint 1) para a tela de detalhe não precisar de `$lookup`. Como o cache da academia guarda o documento inteiro, elas também entram nessa cópia com TTL. Não vão para o Elasticsearch porque a busca não usa o texto das avaliações. |
+| **Fila de Sincronização Pendente** | Redis List (`treinna:sync:pendentes`) | Nenhuma cópia | Dado operacional que só existe no Redis: guarda os `_id` de academias cuja atualização no Elasticsearch falhou. Não é cópia de nada; o conteúdo reindexado é sempre lido do MongoDB no reprocessamento. |
+| **Configuração da Aplicação** | Redis Hash (`treinna:config:app`) | Nenhuma cópia | Metadados não críticos (versão, ambiente, cidade padrão) carregados por `init/redis-init.commands` no `./iniciar.sh`; podem ser recriados a qualquer momento a partir desse arquivo. |
 
 ---
 
@@ -154,9 +157,15 @@ curl -s -X POST http://localhost:3400/api/gyms/ranking/checkin -H "Content-Type:
 # Consultar o Top 2 Academias mais frequentadas
 curl -s "http://localhost:3400/api/gyms/ranking/top?limite=2" | jq .
 ```
-Opcionalmente, valide um check-in real (`PATCH /api/checkins/<ID>/validar`): o score da academia correspondente sobe +1.
-
 *Saída Esperada:* Ironberg em 1º lugar (score 5) e Uplay em 2º lugar (score 3) ordenados em tempo real pelo Redis.
+
+```bash
+# Validar um check-in real na catraca (o check-in pendente do seed é na Academia Flex)
+CHECKIN_ID=$(docker exec nosql_mongo mongosh -u root -p root --quiet --eval 'db.getSiblingDB("treinna").checkins.findOne({status:"pendente"})._id.toString()')
+curl -s -X PATCH "http://localhost:3400/api/checkins/$CHECKIN_ID/validar" | jq -c .
+curl -s "http://localhost:3400/api/gyms/ranking/top" | jq -c .ranking
+```
+*Saída Esperada:* A validação retorna `{"mensagem":"Acesso validado com sucesso!","mongodb":"gravado","ranking":"incrementado (+1)"}` e o ranking passa a ter a "Academia Flex" em 3º lugar com `checkins: 1`. Repetir a validação retorna `"Check-in já estava validado."` e o score não muda.
 
 ### 7.3. Busca com Erro de Digitação (Fuzzy Match)
 ```bash
@@ -174,25 +183,37 @@ curl -s "http://localhost:3400/api/gyms/search?q=musculacao&preco_max=100&cidade
 
 ### 7.5. Escrita Sincronizada e Invalidação
 ```bash
+# Guardar o ID da Uplay Guarapuava (a academia exatamente nas coordenadas abaixo)
+ID=$(curl -s "http://localhost:3400/api/gyms/near?lng=-51.4628&lat=-25.3953" | jq -r '.[0]._id')
+
 # Ler a academia (miss, depois hit) para popular o cache
-curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem}'
-curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem}'
+curl -s "http://localhost:3400/api/gyms/$ID" | jq -c '{origem}'
+curl -s "http://localhost:3400/api/gyms/$ID" | jq -c '{origem}'
 
 # Atualizar nome da academia com sincronização tripla
-curl -s -X PATCH "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" \
+curl -s -X PATCH "http://localhost:3400/api/gyms/$ID" \
   -H "Content-Type: application/json" \
-  -d '{"nome": "Uplay Prime Guarapuava"}' | jq .
+  -d '{"nome": "Uplay Prime Guarapuava"}' | jq -c .
 
 # Conferir na busca textual e na leitura (cache invalidado => novo MISS com o nome novo)
 curl -s "http://localhost:3400/api/gyms/search?q=prime" | jq '.resultados[0].nome'
-curl -s "http://localhost:3400/api/gyms/COLE_O_ID_AQUI" | jq '{origem, nome: .academia.nome}'
+curl -s "http://localhost:3400/api/gyms/$ID" | jq -c '{origem, nome: .academia.nome}'
 ```
-*Saída Esperada:* A mutação retorna `mongodb: gravado`, `redis: invalidado` e `elasticsearch: atualizado (1 documento)`; a busca por "prime" já localiza o documento e a leitura seguinte vem de `MONGODB (CACHE MISS)` com o nome novo. (O ID pode ser obtido com `curl -s "http://localhost:3400/api/gyms/near?lng=-51.4628&lat=-25.3953" | jq -r '.[0]._id'`.)
+*Saída Esperada:*
+```
+{"origem":"MONGODB (CACHE MISS)"}
+{"origem":"REDIS (CACHE HIT)"}
+{"mongodb":"gravado","redis":"invalidado","elasticsearch":"atualizado (1 documento)"}
+"Uplay Prime Guarapuava"
+{"origem":"MONGODB (CACHE MISS)","nome":"Uplay Prime Guarapuava"}
+```
 
 ### 7.6. Falha do Elasticsearch e Reprocessamento
 ```bash
-curl -s -X PATCH "http://localhost:3400/api/gyms/COLE_O_ID_AQUI?simular_falha=elastic" -H "Content-Type: application/json" -d '{"mensalidade_base": 99}' -w ' [%{http_code}]\n'
-curl -s http://localhost:3400/api/gyms/sincronizacao/pendentes | jq .
-curl -s -X POST http://localhost:3400/api/gyms/sincronizacao/reprocessar | jq .
+# Usa o mesmo $ID do passo 7.5
+curl -s -X PATCH "http://localhost:3400/api/gyms/$ID?simular_falha=elastic" -H "Content-Type: application/json" -d '{"mensalidade_base": 99}' -w ' [%{http_code}]\n'
+curl -s http://localhost:3400/api/gyms/sincronizacao/pendentes | jq -c .
+curl -s -X POST http://localhost:3400/api/gyms/sincronizacao/reprocessar | jq -c .
+curl -s http://localhost:3400/api/gyms/sincronizacao/pendentes | jq -c '{total}'
 ```
-*Saída Esperada:* HTTP 202 com `elasticsearch: falhou (...)`; a fila lista 1 ID; o reprocessamento retorna `reprocessadas_total: 1` e a fila fica vazia.
+*Saída Esperada:* HTTP 202 com `elasticsearch: falhou (ElasticSearch fora do ar); pendência registrada`; a fila `treinna:sync:pendentes` lista 1 ID (o `$ID`); o reprocessamento retorna `{"reprocessadas_total":1,"academias_recuperadas":["Uplay Prime Guarapuava"]}` e a fila fica com `{"total":0}`.
