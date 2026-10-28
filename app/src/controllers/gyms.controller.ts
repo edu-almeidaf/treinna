@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { getCollection } from "../database/mongo.js";
+import { getElasticClient } from "../database/elastic.js";
 
 export class GymsController {
-  // 1. Academias Próximas (Radar) - Uso do $near
+  // 1. Academias Próximas (Radar) - Mantido no MongoDB nativo ($near)
   static async listarProximas(req: Request, res: Response): Promise<void> {
     try {
       const { lng, lat, distanciaMetros = 5000 } = req.query;
@@ -32,23 +33,56 @@ export class GymsController {
     }
   }
 
-  // 3. Busca de Academias por Modalidade - Uso do $in
-  static async buscarModalidade(req: Request, res: Response): Promise<void> {
+  // 2. Busca Textual Complexa - Movida para o ElasticSearch (Checkpoint 2)
+  static async buscar(req: Request, res: Response): Promise<void> {
     try {
-      const { modalidade } = req.query;
+      const termo = String(req.query.q || "").trim();
+      const cidade = String(req.query.cidade || "").trim();
+      const precoMax = Number(req.query.preco_max) || null;
 
-      if (!modalidade) {
-        res.status(400).json({ erro: "Parâmetro 'modalidade' é obrigatório." });
+      if (!termo) {
+        res.status(400).json({ erro: "Informe o texto da busca em ?q=" });
         return;
       }
 
-      const col = getCollection("gyms");
-      const academias = await col
-        .find({ ativo: true, modalidades: { $in: [modalidade] } })
-        .sort({ mensalidade_base: 1 })
-        .toArray();
+      // Filtros exatos (eliminam opções sem alterar a relevância)
+      const filtros: any[] = [{ term: { ativo: true } }];
+      if (cidade) filtros.push({ term: { cidade } });
+      if (precoMax) filtros.push({ range: { mensalidade_base: { lte: precoMax } } });
 
-      res.json(academias);
+      const elastic = getElasticClient();
+      const resposta = await elastic.search({
+        index: "academias",
+        query: {
+          bool: {
+            // Must: Avalia a relevância (Score)
+            must: {
+              multi_match: {
+                query: termo,
+                fields: ["nome^3", "modalidades^1"], // Nome vale 3x mais
+                fuzziness: "AUTO" // Tolera erros de digitação
+              }
+            },
+            filter: filtros
+          }
+        }
+      });
+
+      // Mapeando a resposta para exibir a pontuação
+      const resultados = resposta.hits.hits.map((hit: any) => ({
+        nome: hit._source.nome,
+        modalidades: hit._source.modalidades,
+        cidade: hit._source.cidade,
+        mensalidade_base: hit._source.mensalidade_base,
+        relevancia: hit._score === null ? null : Number(hit._score.toFixed(2)),
+      }));
+
+      res.json({
+        origem: "ELASTICSEARCH (multi_match com filtros e fuzziness)",
+        termo,
+        total: resultados.length,
+        resultados,
+      });
     } catch (err: any) {
       res.status(500).json({ erro: err.message });
     }
